@@ -4,6 +4,7 @@
   "package": "fr.hykiuidustries.createboxed.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "DedicatedServerPropertiesMixin"
   ],
   "client": [
   ],

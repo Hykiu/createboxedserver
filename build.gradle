@@ -116,6 +116,17 @@ dependencies {
     // For more info:
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
+
+    // Minecraft/NeoForge classes are compile-only for the main source set, so share that classpath with tests.
+    testImplementation files(sourceSets.main.compileClasspath)
+
+    testImplementation platform("org.junit:junit-bom:5.13.3")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

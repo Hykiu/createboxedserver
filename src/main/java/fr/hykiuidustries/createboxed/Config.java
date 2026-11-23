@@ -1,57 +1,24 @@
 package fr.hykiuidustries.createboxed;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-// An example config class. This is not required, but it's a good idea to have one to keep your config organized.
-// Demonstrates how to use Neo's config APIs
-@EventBusSubscriber(modid = CreateBoxed.MODID)
-public class Config {
+public final class Config {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
-    public static final ModConfigSpec.ConfigValue<String> MAGIC_NUMBER_INTRODUCTION = BUILDER.comment(
-        "What you want the introduction message to be for the magic number").define(
-        "magicNumberIntroduction",
-        "The magic number is... "
-    );
-    static final ModConfigSpec SPEC = BUILDER.build();
-    private static final ModConfigSpec.BooleanValue LOG_DIRT_BLOCK = BUILDER.comment(
-        "Whether to log the dirt block on common setup").define("logDirtBlock", true);
-    private static final ModConfigSpec.IntValue MAGIC_NUMBER = BUILDER.comment("A magic number")
-        .defineInRange("magicNumber", 42, 0, Integer.MAX_VALUE);
-    // a list of strings that are treated as resource locations for items
-    private static final ModConfigSpec.ConfigValue<List<? extends String>> ITEM_STRINGS = BUILDER.comment(
-        "A list of items to log on common setup.").defineListAllowEmpty(
-        "items",
-        List.of("minecraft:iron_ingot"),
-        () -> "minecraft:iron_ingot",
-        Config::validateItemName
-    );
-    public static boolean logDirtBlock;
-    public static int magicNumber;
-    public static String magicNumberIntroduction;
-    public static Set<Item> items;
 
-    private static boolean validateItemName(final Object obj) {
-        return obj instanceof String itemName &&
-            BuiltInRegistries.ITEM.containsKey(ResourceLocation.parse(itemName));
-    }
+    public static final ModConfigSpec.IntValue GAP = BUILDER.comment(
+        "Number of chunks between the edges of two neighbouring plots. Frozen on first plot creation."
+    ).defineInRange("gap", 12, 0, Integer.MAX_VALUE);
 
-    @SubscribeEvent
-    static void onLoad(final ModConfigEvent event) {
-        logDirtBlock = LOG_DIRT_BLOCK.get(); magicNumber = MAGIC_NUMBER.get();
-        magicNumberIntroduction = MAGIC_NUMBER_INTRODUCTION.get();
+    public static final ModConfigSpec.IntValue MIN_SPAWN_DISTANCE = BUILDER.comment(
+        "Minimum distance in chunks from the spawn anchor to the nearest edge of a new plot."
+    ).defineInRange("minSpawnDistance", 32, 0, Integer.MAX_VALUE);
 
-        // convert the list of strings into a set of items
-        items = ITEM_STRINGS.get().stream().map(itemName -> BuiltInRegistries.ITEM.get(
-            ResourceLocation.parse(itemName))).collect(Collectors.toSet());
+    public static final ModConfigSpec.IntValue CHUNKS_PER_TICK = BUILDER.comment(
+        "Maximum number of plot chunks filled per server tick."
+    ).defineInRange("chunksPerTick", 2, 1, 64);
+
+    public static final ModConfigSpec SPEC = BUILDER.build();
+
+    private Config() {
     }
 }

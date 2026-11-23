@@ -1,5 +1,11 @@
 {
   "itemGroup.createboxed": "Example Mod Tab",
   "block.createboxed.example_block": "Example Block",
-  "item.createboxed.example_item": "Example Item"
+  "item.createboxed.example_item": "Example Item",
+  "createboxed.plot.server_only": "Plots are only available on a server.",
+  "createboxed.plot.player_only": "/plot must be run by a player.",
+  "createboxed.plot.busy": "A plot is already generating. Please wait until it is done.",
+  "createboxed.plot.started": "Generating plot %s (%s chunks). You will be teleported when it is done.",
+  "createboxed.plot.progress": "Plot generation progress: %s/%s chunks.",
+  "createboxed.plot.done": "Plot %s is ready. You have been teleported to its center."
 }
