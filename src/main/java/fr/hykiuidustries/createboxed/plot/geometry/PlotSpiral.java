@@ -1,11 +1,13 @@
 package fr.hykiuidustries.createboxed.plot.geometry;
 
-/** Pure placement maths: no Minecraft classes are used here. */
+import lombok.experimental.UtilityClass;
+
+/**
+ * Pure placement maths: no Minecraft classes are used here.
+ */
+@UtilityClass
 public final class PlotSpiral {
     private static final int HALF_PLOT = PlotGeometry.PLOT_CHUNKS / 2;
-
-    private PlotSpiral() {
-    }
 
     /**
      * Maps a spiral index to a grid cell: 0 = (0,0), 1 = (1,0), 2 = (1,1),
@@ -46,7 +48,9 @@ public final class PlotSpiral {
         return new PlotCell((int) x, (int) z);
     }
 
-    /** A cell is valid when its nearest edge is far enough from the anchor. */
+    /**
+     * A cell is valid when its nearest edge is far enough from the anchor.
+     */
     public static boolean isValid(PlotCell cell, int pitch, int minSpawnDistance) {
         long chebyshevDistance = Math.max(Math.abs((long) cell.cx()), Math.abs((long) cell.cz()));
         return chebyshevDistance * pitch - HALF_PLOT >= minSpawnDistance;

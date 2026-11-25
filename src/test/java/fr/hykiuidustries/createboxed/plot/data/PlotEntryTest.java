@@ -1,18 +1,17 @@
 package fr.hykiuidustries.createboxed.plot.data;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import fr.hykiuidustries.createboxed.plot.geometry.PlotCell;
-import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class PlotEntryTest {
     @Test
     void roundTripsAllPersistentFields() {
-        UUID creator = UUID.fromString("2d1c442e-5a2b-4c8f-9f5a-1c0d3b7e6a44");
-        PlotEntry entry = new PlotEntry(10, new PlotCell(2, -1), 47, -24, creator);
-        entry.setNextChunk(128);
+        int teamId = 17;
+        PlotEntry entry = new PlotEntry(10, new PlotCell(2, -1), 47, -24, teamId);
+        entry.nextChunk(128);
 
         PlotEntry loaded = PlotEntry.read(entry.write(new CompoundTag()));
 
@@ -20,16 +19,16 @@ class PlotEntryTest {
         assertEquals(new PlotCell(2, -1), loaded.cell());
         assertEquals(47, loaded.originX());
         assertEquals(-24, loaded.originZ());
-        assertEquals(creator, loaded.creator());
+        assertEquals(teamId, loaded.teamId());
         assertEquals(PlotStatus.GENERATING, loaded.status());
         assertEquals(128, loaded.nextChunk());
     }
 
     @Test
     void keepsDoneStatusAndProgress() {
-        PlotEntry entry = new PlotEntry(3, new PlotCell(0, 0), 0, 0, UUID.randomUUID());
-        entry.setNextChunk(225);
-        entry.setStatus(PlotStatus.DONE);
+        PlotEntry entry = new PlotEntry(3, new PlotCell(0, 0), 0, 0, 4);
+        entry.nextChunk(225);
+        entry.status(PlotStatus.DONE);
 
         PlotEntry loaded = PlotEntry.read(entry.write(new CompoundTag()));
 
@@ -38,8 +37,20 @@ class PlotEntryTest {
     }
 
     @Test
+    void roundTripsDeletingStatus() {
+        PlotEntry entry = new PlotEntry(6, new PlotCell(1, 1), 16, 32, 9);
+        entry.status(PlotStatus.DELETING);
+        entry.nextChunk(70);
+
+        PlotEntry loaded = PlotEntry.read(entry.write(new CompoundTag()));
+
+        assertEquals(PlotStatus.DELETING, loaded.status());
+        assertEquals(70, loaded.nextChunk());
+    }
+
+    @Test
     void fallsBackToGeneratingForUnknownStatus() {
-        PlotEntry entry = new PlotEntry(1, new PlotCell(0, 0), 0, 0, UUID.randomUUID());
+        PlotEntry entry = new PlotEntry(1, new PlotCell(0, 0), 0, 0, 4);
         CompoundTag tag = entry.write(new CompoundTag());
         tag.putString("status", "CORRUPTED");
 

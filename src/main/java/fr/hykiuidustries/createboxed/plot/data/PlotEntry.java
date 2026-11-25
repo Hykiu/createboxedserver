@@ -1,31 +1,47 @@
 package fr.hykiuidustries.createboxed.plot.data;
 
 import fr.hykiuidustries.createboxed.plot.geometry.PlotCell;
-import java.util.UUID;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import net.minecraft.nbt.CompoundTag;
+import org.jspecify.annotations.NullMarked;
 
-/** Persistent record of one plot. */
+/**
+ * Persistent record of one plot (a slot in user-facing messages).
+ */
+@Getter
+@Accessors(fluent = true)
+@NullMarked
 public final class PlotEntry {
     private final int index;
     private final PlotCell cell;
     private final int originX;
     private final int originZ;
-    private final UUID creator;
+    private final int teamId;
+    @Setter
     private PlotStatus status;
+    @Setter
     private int nextChunk;
 
-    public PlotEntry(int index, PlotCell cell, int originX, int originZ, UUID creator) {
-        this(index, cell, originX, originZ, creator, PlotStatus.GENERATING, 0);
+    public PlotEntry(int index, PlotCell cell, int originX, int originZ, int teamId) {
+        this(index, cell, originX, originZ, teamId, PlotStatus.GENERATING, 0);
     }
 
     private PlotEntry(
-        int index, PlotCell cell, int originX, int originZ, UUID creator, PlotStatus status, int nextChunk
+        int index,
+        PlotCell cell,
+        int originX,
+        int originZ,
+        int teamId,
+        PlotStatus status,
+        int nextChunk
     ) {
         this.index = index;
         this.cell = cell;
         this.originX = originX;
         this.originZ = originZ;
-        this.creator = creator;
+        this.teamId = teamId;
         this.status = status;
         this.nextChunk = nextChunk;
     }
@@ -42,7 +58,7 @@ public final class PlotEntry {
             new PlotCell(tag.getInt("cellX"), tag.getInt("cellZ")),
             tag.getInt("originX"),
             tag.getInt("originZ"),
-            tag.getUUID("creator"),
+            tag.getInt("teamId"),
             status,
             tag.getInt("nextChunk")
         );
@@ -54,45 +70,9 @@ public final class PlotEntry {
         tag.putInt("cellZ", cell.cz());
         tag.putInt("originX", originX);
         tag.putInt("originZ", originZ);
-        tag.putUUID("creator", creator);
+        tag.putInt("teamId", teamId);
         tag.putString("status", status.name());
         tag.putInt("nextChunk", nextChunk);
         return tag;
-    }
-
-    public int index() {
-        return index;
-    }
-
-    public PlotCell cell() {
-        return cell;
-    }
-
-    public int originX() {
-        return originX;
-    }
-
-    public int originZ() {
-        return originZ;
-    }
-
-    public UUID creator() {
-        return creator;
-    }
-
-    public PlotStatus status() {
-        return status;
-    }
-
-    public void setStatus(PlotStatus status) {
-        this.status = status;
-    }
-
-    public int nextChunk() {
-        return nextChunk;
-    }
-
-    public void setNextChunk(int nextChunk) {
-        this.nextChunk = nextChunk;
     }
 }

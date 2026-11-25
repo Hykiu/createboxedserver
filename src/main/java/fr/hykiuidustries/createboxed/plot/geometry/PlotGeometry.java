@@ -1,8 +1,12 @@
 package fr.hykiuidustries.createboxed.plot.geometry;
 
+import lombok.experimental.UtilityClass;
 import net.minecraft.core.BlockPos;
 
-/** Single source of truth for plot size and vertical range. */
+/**
+ * Single source of truth for plot size and vertical range.
+ */
+@UtilityClass
 public final class PlotGeometry {
     public static final int PLOT_CHUNKS = 15;
     public static final int PLOT_BLOCKS = PLOT_CHUNKS * 16;
@@ -13,9 +17,6 @@ public final class PlotGeometry {
     public static final int MAX_Y = 63;
     public static final int MIN_SECTION_Y = Math.floorDiv(MIN_Y, 16);
     public static final int MAX_SECTION_Y = Math.floorDiv(MAX_Y, 16);
-
-    private PlotGeometry() {
-    }
 
     public static int pitch(int gap) {
         return PLOT_CHUNKS + gap;
@@ -29,7 +30,9 @@ public final class PlotGeometry {
         return centerChunk - HALF_CHUNKS;
     }
 
-    /** Returns the middle block of the plot at the given Y level. */
+    /**
+     * Returns the middle block of the plot at the given Y level.
+     */
     public static BlockPos centerBlock(int centerChunkX, int centerChunkZ, int y) {
         return new BlockPos(centerChunkX * 16 + 8, y, centerChunkZ * 16 + 8);
     }

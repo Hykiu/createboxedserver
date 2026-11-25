@@ -1,32 +1,27 @@
 package fr.hykiuidustries.createboxed.plot;
 
+import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.tree.LiteralCommandNode;
+import java.util.Objects;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.network.chat.Component;
 
-/** The /plot command, restricted to permission level 2. */
+/**
+ * Keeps /plot as a full alias of /slot by redirecting to the same command node,
+ * the way Minecraft registers /tell and /w for /msg. The redirect alone is not
+ * enough for the bare command: Brigadier only follows a redirect when there is
+ * another token to parse, so the alias also reuses the root command.
+ */
 public final class PlotCommand {
     private PlotCommand() {
     }
 
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("plot")
-            .requires(source -> source.hasPermission(2))
-            .executes(context -> {
-                CommandSourceStack source = context.getSource();
-                PlotManager manager = PlotManager.get();
-                if (manager == null) {
-                    source.sendFailure(Component.translatable("createboxed.plot.server_only"));
-                    return 0;
-                }
-                Component error = manager.createPlot(source);
-                if (error != null) {
-                    source.sendFailure(error);
-                    return 0;
-                }
-                return 1;
-            })
-        );
+    public static void registerAlias(
+        CommandDispatcher<CommandSourceStack> dispatcher,
+        LiteralCommandNode<CommandSourceStack> slot
+    ) {
+        Command<CommandSourceStack> command = Objects.requireNonNull(slot.getCommand());
+        dispatcher.register(Commands.literal("plot").executes(command).redirect(slot));
     }
 }
