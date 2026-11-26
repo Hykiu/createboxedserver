@@ -3,12 +3,12 @@ package fr.hykiuidustries.createboxed.team.gametest;
 import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import fr.hykiuidustries.createboxed.CreateBoxed;
-import fr.hykiuidustries.createboxed.plot.PlotManager;
 import fr.hykiuidustries.createboxed.plot.data.PlotData;
 import fr.hykiuidustries.createboxed.plot.data.PlotEntry;
 import fr.hykiuidustries.createboxed.plot.data.PlotStatus;
 import fr.hykiuidustries.createboxed.plot.gametest.PlotGameTests;
 import fr.hykiuidustries.createboxed.plot.geometry.PlotGeometry;
+import fr.hykiuidustries.createboxed.plot.geometry.PlotSpawn;
 import fr.hykiuidustries.createboxed.team.TeamManager;
 import fr.hykiuidustries.createboxed.team.data.Team;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -21,9 +21,13 @@ import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -31,6 +35,7 @@ import java.util.UUID;
  * In-world checks for team membership and the /slot command.
  */
 @GameTestHolder(CreateBoxed.MOD_ID)
+@SuppressWarnings({"unused", "DuplicatedCode", "DataFlowIssue"}) // GameTest methods are discovered by the framework.
 public final class TeamGameTests {
     private TeamGameTests() {
     }
@@ -52,14 +57,13 @@ public final class TeamGameTests {
         );
         helper.assertTrue(team.name().length() >= 3, "Solo team name must be valid");
         helper.assertTrue(
-            team.slotIndex() != null, "A new team must automatically get a slot (slot="
-                + team.slotIndex() + ", plots=" + data.plots().size()
-                + ", generating=" + PlotManager.get().isGenerating()
-                + ", deleting=" + PlotManager.get().isDeleting() + ")"
+            team.slotIndex() == null,
+            "A new team must not get a slot before /slot (slot=" + team.slotIndex()
+                + ", plots=" + data.plots().size() + ")"
         );
         helper.assertTrue(
-            data.plots().stream().anyMatch(plot -> plot.teamId() == team.id()),
-            "The automatic slot must be persisted"
+            data.plots().isEmpty(),
+            "No slot may be persisted before the player runs /slot"
         );
         helper.succeed();
     }
@@ -169,9 +173,10 @@ public final class TeamGameTests {
 
         ServerPlayer player = createTestPlayer(helper, "slot-owner");
         Team team = data.teamOf(player.getUUID()).orElseThrow();
+        startPlot(helper, player);
 
         Integer slotIndex = team.slotIndex();
-        helper.assertTrue(slotIndex != null, "Login did not automatically start a slot");
+        helper.assertTrue(slotIndex != null, "/slot did not start a slot");
         PlotEntry entry = data.plots().stream()
             .filter(plot -> plot.index() == slotIndex)
             .findFirst()
@@ -192,14 +197,14 @@ public final class TeamGameTests {
             execute(helper, player, "slot") == 1,
             "/slot must enter the finished slot"
         );
-        BlockPos expected = PlotGeometry.centerBlock(
-            created.originX() + PlotGeometry.HALF_CHUNKS,
-            created.originZ() + PlotGeometry.HALF_CHUNKS,
-            PlotGeometry.MAX_Y + 1
+        BlockPos expected = Objects.requireNonNull(
+            created.spawnPoint(),
+            "The teleport must save a valid spawn point"
         );
+        helper.assertTrue(PlotSpawn.isValid(level, expected), "The saved spawn point must be valid");
         helper.assertTrue(
             player.blockPosition().equals(expected),
-            "Owner was not teleported to slot center"
+            "Owner was not teleported to the saved spawn point"
         );
         helper.succeed();
     }
@@ -213,6 +218,7 @@ public final class TeamGameTests {
 
         ServerPlayer player = createTestPlayer(helper, "delete-owner");
         Team team = data.teamOf(player.getUUID()).orElseThrow();
+        startPlot(helper, player);
         PlotEntry created = Objects.requireNonNull(
             data.plots()
                 .stream()
@@ -250,8 +256,8 @@ public final class TeamGameTests {
         );
 
         helper.assertTrue(
-            execute(helper, player, "slot") == 0,
-            "A teamless /slot must queue generation"
+            execute(helper, player, "slot") == 1,
+            "A teamless /slot must start a new slot"
         );
         Team replacement = data.teamOf(player.getUUID()).orElseThrow();
         helper.assertTrue(replacement.id() != team.id(), "The player must receive a new team");
@@ -281,6 +287,7 @@ public final class TeamGameTests {
 
         ServerPlayer owner = createTestPlayer(helper, "visit-owner");
         Team team = data.teamOf(owner.getUUID()).orElseThrow();
+        startPlot(helper, owner);
         PlotEntry plot = Objects.requireNonNull(
             data.plots()
                 .stream()
@@ -295,14 +302,17 @@ public final class TeamGameTests {
             execute(helper, visitor, "slot visit " + team.name()) == 1,
             "visit failed"
         );
-        BlockPos expected = PlotGeometry.centerBlock(
-            plot.originX() + PlotGeometry.HALF_CHUNKS,
-            plot.originZ() + PlotGeometry.HALF_CHUNKS,
-            PlotGeometry.MAX_Y + 1
+        BlockPos expected = Objects.requireNonNull(
+            plot.spawnPoint(),
+            "The completed plot must have a saved spawn point"
         );
         helper.assertTrue(
             visitor.blockPosition().equals(expected),
-            "Visitor was not teleported to the slot"
+            "Visitor was not teleported to the saved spawn point"
+        );
+        helper.assertTrue(
+            execute(helper, visitor, "slot visit " + team.name()) == 1,
+            "visiting a slot you are already in must be allowed"
         );
         helper.succeed();
     }
@@ -316,6 +326,7 @@ public final class TeamGameTests {
 
         ServerPlayer target = createTestPlayer(helper, "admin-delete-target");
         Team team = data.teamOf(target.getUUID()).orElseThrow();
+        startPlot(helper, target);
         PlotEntry plot = Objects.requireNonNull(
             data.plots()
                 .stream()
@@ -327,7 +338,7 @@ public final class TeamGameTests {
 
         helper.assertTrue(executeAdmin(helper, "slot admin list") == 1, "admin list failed");
         helper.assertTrue(
-            executeDenied(helper, target, "slot admin list") == 0,
+            executeDenied(helper, target) == 0,
             "a normal player must not access admin commands"
         );
         helper.assertTrue(
@@ -411,6 +422,7 @@ public final class TeamGameTests {
 
         ServerPlayer owner = createTestPlayer(helper, "admin-visit-owner");
         Team team = data.teamOf(owner.getUUID()).orElseThrow();
+        startPlot(helper, owner);
         PlotEntry plot = Objects.requireNonNull(
             data.plots()
                 .stream()
@@ -419,10 +431,9 @@ public final class TeamGameTests {
                 .orElse(null)
         );
         finishPlot(helper, plot);
-        BlockPos expected = PlotGeometry.centerBlock(
-            plot.originX() + PlotGeometry.HALF_CHUNKS,
-            plot.originZ() + PlotGeometry.HALF_CHUNKS,
-            PlotGeometry.MAX_Y + 1
+        BlockPos expected = Objects.requireNonNull(
+            plot.spawnPoint(),
+            "The completed plot must have a saved spawn point"
         );
 
         ServerPlayer visitor = createTestPlayer(helper, "admin-visit-guest");
@@ -447,6 +458,278 @@ public final class TeamGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty",
+        timeoutTicks = 200)
+    public static void leaderSetsSpawnAndTeleportUsesItTest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        PlotGameTests.clearActiveWork(level);
+        PlotData data = PlotData.get(level);
+
+        ServerPlayer player = createTestPlayer(helper, "spawn-leader");
+        Team team = data.teamOf(player.getUUID()).orElseThrow();
+        startPlot(helper, player);
+        PlotEntry plot = plotOf(data, team);
+        finishPlot(helper, plot);
+
+        BlockPos desired = player.blockPosition();
+        helper.assertTrue(
+            PlotSpawn.isValid(level, desired),
+            "Setup: the default teleport point must be valid"
+        );
+        helper.assertTrue(
+            execute(helper, player, "slot setspawn") == 1,
+            "the leader must be able to set the spawn point"
+        );
+        helper.assertTrue(
+            desired.equals(plot.spawnPoint()),
+            "The chosen spawn point must be persisted on the plot"
+        );
+
+        BlockPos away = new BlockPos(desired.getX() + 100, desired.getY(), desired.getZ());
+        movePlayer(player, level, away);
+        helper.assertTrue(
+            !player.blockPosition().equals(desired),
+            "Setup: the player must be moved away from the spawn point"
+        );
+        helper.assertTrue(execute(helper, player, "slot") == 1, "/slot failed");
+        helper.assertTrue(
+            desired.equals(player.blockPosition()),
+            "The teleport must use the spawn point set by the leader"
+        );
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty",
+        timeoutTicks = 200)
+    public static void nonLeaderCannotSetSpawnTest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        PlotGameTests.clearActiveWork(level);
+        PlotData data = PlotData.get(level);
+
+        ServerPlayer leader = createTestPlayer(helper, "spawn-team-leader");
+        ServerPlayer guest = createTestPlayer(helper, "spawn-team-guest");
+        makeTeamless(data, guest);
+        Team team = data.teamOf(leader.getUUID()).orElseThrow();
+        startPlot(helper, leader);
+        PlotEntry plot = plotOf(data, team);
+        finishPlot(helper, plot);
+
+        helper.assertTrue(
+            executeAdmin(helper, "slot admin team invite " + team.name() + " spawn-team-guest")
+                == 1,
+            "admin invite failed"
+        );
+        helper.assertTrue(
+            execute(helper, guest, "slot team accept") == 1,
+            "the guest could not join the team"
+        );
+        BlockPos before = plot.spawnPoint();
+        helper.assertTrue(
+            execute(helper, guest, "slot setspawn") == 0,
+            "a non-leader must not be able to set the spawn point"
+        );
+        helper.assertTrue(
+            Objects.equals(before, plot.spawnPoint()),
+            "A refused setspawn must not change the saved point"
+        );
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty",
+        timeoutTicks = 200)
+    public static void adminSetsSpawnAtCurrentPositionTest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        PlotGameTests.clearActiveWork(level);
+        PlotData data = PlotData.get(level);
+
+        ServerPlayer owner = createTestPlayer(helper, "spawn-admin-owner");
+        Team team = data.teamOf(owner.getUUID()).orElseThrow();
+        startPlot(helper, owner);
+        PlotEntry plot = plotOf(data, team);
+        finishPlot(helper, plot);
+        BlockPos desired = owner.blockPosition();
+
+        ServerPlayer admin = createTestPlayer(helper, "spawn-admin");
+        movePlayer(admin, level, desired);
+        helper.assertTrue(
+            executeWithPermission(
+                helper, admin, "slot admin setspawn " + team.name()
+            ) == 1,
+            "the admin must be able to set a spawn point at their own position"
+        );
+        helper.assertTrue(
+            desired.equals(plot.spawnPoint()),
+            "The admin's current position must be saved"
+        );
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty",
+        timeoutTicks = 200)
+    public static void adminSetsSpawnWithCoordinatesTest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        PlotGameTests.clearActiveWork(level);
+        PlotData data = PlotData.get(level);
+
+        ServerPlayer owner = createTestPlayer(helper, "spawn-coords-owner");
+        Team team = data.teamOf(owner.getUUID()).orElseThrow();
+        startPlot(helper, owner);
+        PlotEntry plot = plotOf(data, team);
+        finishPlot(helper, plot);
+        BlockPos desired = owner.blockPosition();
+
+        helper.assertTrue(
+            executeAdmin(helper, "slot admin setspawn " + team.name()
+                                + " " + desired.getX()
+                                + " " + desired.getY()
+                                + " " + desired.getZ()) == 1,
+            "the admin must be able to set a spawn point with explicit coordinates"
+        );
+        helper.assertTrue(
+            desired.equals(plot.spawnPoint()),
+            "The explicit coordinates must be saved"
+        );
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty",
+        timeoutTicks = 20000)
+    public static void adjustedSpawnIsSavedAndUsedTest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        PlotGameTests.clearActiveWork(level);
+        PlotData data = PlotData.get(level);
+
+        ServerPlayer owner = createTestPlayer(helper, "spawn-adjust-owner");
+        Team team = data.teamOf(owner.getUUID()).orElseThrow();
+        startPlot(helper, owner);
+        PlotEntry plot = plotOf(data, team);
+        finishPlot(helper, plot);
+        BlockPos desired = owner.blockPosition();
+
+        // Remove the saved column and build one valid neighbour, so resolution has a clear
+        // fallback. Original states are restored below to keep other GameTests deterministic.
+        Map<BlockPos, BlockState> original = new HashMap<>();
+        for (int y = PlotGeometry.MIN_Y; y <= desired.getY(); y++) {
+            BlockPos target = new BlockPos(desired.getX(), y, desired.getZ());
+            original.put(target, level.getBlockState(target));
+            level.setBlock(target, Blocks.AIR.defaultBlockState(), 3);
+        }
+        BlockPos neighbour = desired.east();
+        for (BlockPos target : new BlockPos[]{
+            neighbour.below(), neighbour, neighbour.above()
+        }) {
+            original.put(target, level.getBlockState(target));
+        }
+        level.setBlock(neighbour.below(), Blocks.STONE.defaultBlockState(), 3);
+        level.setBlock(neighbour, Blocks.AIR.defaultBlockState(), 3);
+        level.setBlock(neighbour.above(), Blocks.AIR.defaultBlockState(), 3);
+
+        plot.spawnPoint(desired);
+        data.setDirty();
+        helper.assertTrue(
+            !PlotSpawn.isValid(level, desired),
+            "Setup: the saved point must be invalid"
+        );
+        helper.assertTrue(
+            PlotSpawn.isValid(level, neighbour),
+            "Setup: the neighbour must be a valid standing point"
+        );
+
+        movePlayer(owner, level, new BlockPos(desired.getX() + 100, desired.getY(), desired.getZ()));
+        helper.assertTrue(execute(helper, owner, "slot") == 1, "/slot failed");
+
+        BlockPos saved = plot.spawnPoint();
+        helper.assertTrue(
+            saved != null
+                && !saved.equals(desired)
+                && PlotSpawn.isValid(level, saved)
+                && Math.max(Math.abs(saved.getX() - desired.getX()),
+                    Math.abs(saved.getZ() - desired.getZ())) <= 1,
+            "The invalid point must be replaced by a valid neighbour (got " + saved + ")"
+        );
+        helper.assertTrue(saved.equals(owner.blockPosition()), "The player must land on the new point");
+        original.forEach((pos, state) -> level.setBlock(pos, state, 3));
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty",
+        timeoutTicks = 20000)
+    public static void destroyedSpawnCreatesBedrockPlatformTest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        PlotGameTests.clearActiveWork(level);
+        PlotData data = PlotData.get(level);
+
+        ServerPlayer owner = createTestPlayer(helper, "spawn-platform-owner");
+        Team team = data.teamOf(owner.getUUID()).orElseThrow();
+        startPlot(helper, owner);
+        PlotEntry plot = plotOf(data, team);
+        finishPlot(helper, plot);
+
+        // Clear every column the nearby search covers so the fallback builds a platform.
+        // Original states are restored afterwards to keep other GameTests deterministic.
+        BlockPos buried = owner.blockPosition();
+        Map<BlockPos, BlockState> original = new HashMap<>();
+        for (int dx = -16; dx <= 16; dx++) {
+            for (int dz = -16; dz <= 16; dz++) {
+                for (int y = PlotGeometry.MIN_Y; y <= buried.getY(); y++) {
+                    BlockPos target = buried.offset(dx, y - buried.getY(), dz);
+                    original.put(target, level.getBlockState(target));
+                    level.setBlock(target, Blocks.AIR.defaultBlockState(), 3);
+                }
+            }
+        }
+        helper.assertTrue(
+            !PlotSpawn.isValid(level, buried),
+            "Setup: the buried point must be invalid"
+        );
+        plot.spawnPoint(buried);
+        data.setDirty();
+
+        movePlayer(
+            owner, level,
+            new BlockPos(buried.getX() + 100, buried.getY(), buried.getZ())
+        );
+        helper.assertTrue(execute(helper, owner, "slot") == 1, "/slot failed");
+
+        BlockPos expected = new BlockPos(buried.getX(), PlotGeometry.MIN_Y + 1, buried.getZ());
+        helper.assertTrue(
+            expected.equals(plot.spawnPoint()),
+            "The platform position must be persisted (saved=" + plot.spawnPoint() + ")"
+        );
+        helper.assertTrue(
+            expected.equals(owner.blockPosition()),
+            "The player must be teleported onto the platform"
+        );
+        helper.assertTrue(
+            level.getBlockState(expected.below()).is(Blocks.BEDROCK),
+            "A bedrock platform must be created when no valid block remains"
+        );
+        original.forEach((pos, state) -> level.setBlock(pos, state, 3));
+        helper.succeed();
+    }
+
+    private static PlotEntry plotOf(PlotData data, Team team) {
+        return Objects.requireNonNull(
+            data.plots()
+                .stream()
+                .filter(plot -> plot.teamId() == team.id())
+                .findFirst()
+                .orElse(null),
+            "The team must own a persisted plot"
+        );
+    }
+
+    private static void movePlayer(ServerPlayer player, ServerLevel level, BlockPos pos) {
+        player.teleportTo(
+            level,
+            pos.getX() + 0.5,
+            pos.getY(),
+            pos.getZ() + 0.5,
+            player.getYRot(),
+            player.getXRot()
+        );
+    }
+
     private static int execute(GameTestHelper helper, ServerPlayer player, String command) {
         ServerLevel level = helper.getLevel();
         CommandSourceStack source = new CommandSourceStack(
@@ -461,14 +744,15 @@ public final class TeamGameTests {
         }
     }
 
-    private static int executeDenied(GameTestHelper helper, ServerPlayer player, String command) {
+    private static int executeDenied(GameTestHelper helper, ServerPlayer player) {
         ServerLevel level = helper.getLevel();
         CommandSourceStack source = new CommandSourceStack(
             player, player.position(), player.getRotationVector(), level,
             0, "test", player.getDisplayName(), level.getServer(), player
         );
         try {
-            return level.getServer().getCommands().getDispatcher().execute(command, source);
+            return level.getServer().getCommands().getDispatcher()
+                .execute("slot admin list", source);
         } catch (CommandSyntaxException exception) {
             return 0;
         }
@@ -511,6 +795,13 @@ public final class TeamGameTests {
                 data.removePlot(plot);
             }
         }
+    }
+
+    private static void startPlot(GameTestHelper helper, ServerPlayer player) {
+        helper.assertTrue(
+            execute(helper, player, "slot") == 1,
+            "/slot must start the team's plot"
+        );
     }
 
     private static void finishPlot(GameTestHelper helper, PlotEntry entry) {

@@ -20,6 +20,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
 /** Clears one plot chunk back to air, keeping the chunk's biomes. */
+@SuppressWarnings("DuplicatedCode")
 public final class AirChunkFiller implements PlotChunkFiller {
     @Override
     public Prepared prepare(int plotX, int plotZ) {

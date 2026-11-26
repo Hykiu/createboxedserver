@@ -20,6 +20,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
 /** Fills the plot volume with dirt without millions of individual block updates. */
+@SuppressWarnings("DuplicatedCode")
 public final class DirtChunkFiller implements PlotChunkFiller {
     @Override
     public Prepared prepare(int plotX, int plotZ) {

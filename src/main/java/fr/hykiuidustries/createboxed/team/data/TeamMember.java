@@ -1,5 +1,6 @@
 package fr.hykiuidustries.createboxed.team.data;
 
+import fr.hykiuidustries.createboxed.Keys.Nbt;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import net.minecraft.nbt.CompoundTag;
@@ -13,6 +14,7 @@ import java.util.UUID;
 @Getter
 @Accessors(fluent = true)
 @NullMarked
+@SuppressWarnings("ClassCanBeRecord")
 public final class TeamMember {
     private final UUID uuid;
     private final String name;
@@ -23,12 +25,12 @@ public final class TeamMember {
     }
 
     public static TeamMember read(CompoundTag tag) {
-        return new TeamMember(tag.getUUID("uuid"), tag.getString("name"));
+        return new TeamMember(tag.getUUID(Nbt.UUID), tag.getString(Nbt.NAME));
     }
 
     public CompoundTag write(CompoundTag tag) {
-        tag.putUUID("uuid", uuid);
-        tag.putString("name", name);
+        tag.putUUID(Nbt.UUID, uuid);
+        tag.putString(Nbt.NAME, name);
         return tag;
     }
 }

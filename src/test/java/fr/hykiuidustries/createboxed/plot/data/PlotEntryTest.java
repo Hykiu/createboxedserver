@@ -1,10 +1,13 @@
 package fr.hykiuidustries.createboxed.plot.data;
 
+import fr.hykiuidustries.createboxed.Keys.Nbt;
 import fr.hykiuidustries.createboxed.plot.geometry.PlotCell;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class PlotEntryTest {
     @Test
@@ -12,6 +15,7 @@ class PlotEntryTest {
         int teamId = 17;
         PlotEntry entry = new PlotEntry(10, new PlotCell(2, -1), 47, -24, teamId);
         entry.nextChunk(128);
+        entry.spawnPoint(new BlockPos(100, 64, -200));
 
         PlotEntry loaded = PlotEntry.read(entry.write(new CompoundTag()));
 
@@ -22,6 +26,14 @@ class PlotEntryTest {
         assertEquals(teamId, loaded.teamId());
         assertEquals(PlotStatus.GENERATING, loaded.status());
         assertEquals(128, loaded.nextChunk());
+        assertEquals(new BlockPos(100, 64, -200), loaded.spawnPoint());
+    }
+
+    @Test
+    void hasNoCustomSpawnPointByDefault() {
+        PlotEntry entry = new PlotEntry(1, new PlotCell(0, 0), 0, 0, 4);
+        assertNull(entry.spawnPoint());
+        assertNull(PlotEntry.read(entry.write(new CompoundTag())).spawnPoint());
     }
 
     @Test
@@ -52,7 +64,7 @@ class PlotEntryTest {
     void fallsBackToGeneratingForUnknownStatus() {
         PlotEntry entry = new PlotEntry(1, new PlotCell(0, 0), 0, 0, 4);
         CompoundTag tag = entry.write(new CompoundTag());
-        tag.putString("status", "CORRUPTED");
+        tag.putString(Nbt.STATUS, "CORRUPTED");
 
         assertEquals(PlotStatus.GENERATING, PlotEntry.read(tag).status());
     }

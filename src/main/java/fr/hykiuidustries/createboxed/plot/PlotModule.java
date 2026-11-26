@@ -17,6 +17,8 @@ public final class PlotModule implements Module {
     private static ModConfigSpec.IntValue chunksPerTick;
 
     private PlotEvents events;
+    private PlotManager manager;
+    private ModuleContext context;
 
     public static int gap() {
         return require(gap, "gap").get();
@@ -59,7 +61,10 @@ public final class PlotModule implements Module {
 
     @Override
     public void enable(ModuleContext ctx) {
-        events = new PlotEvents();
+        this.context = ctx;
+        manager = new PlotManager();
+        ctx.services().register(PlotManager.class, manager);
+        events = new PlotEvents(manager);
         NeoForge.EVENT_BUS.register(events);
     }
 
@@ -69,6 +74,13 @@ public final class PlotModule implements Module {
             NeoForge.EVENT_BUS.unregister(events);
             events = null;
         }
-        PlotManager.stop();
+        if (manager != null) {
+            manager.stop();
+            manager = null;
+        }
+        if (context != null) {
+            context.services().unregister(PlotManager.class);
+            context = null;
+        }
     }
 }

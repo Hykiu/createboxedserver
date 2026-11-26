@@ -19,6 +19,7 @@ public class ServiceRegistry {
         return s;
     }
 
+    @SuppressWarnings("unused")
     public <T> Optional<T> find(Class<T> type) {
         return Optional.ofNullable(type.cast(services.get(type)));
     }

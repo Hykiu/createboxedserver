@@ -10,21 +10,24 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * module is enabled, so disabling it also removes the command and the tick handler.
  */
 public final class PlotEvents {
+    private final PlotManager manager;
+
+    public PlotEvents(PlotManager manager) {
+        this.manager = manager;
+    }
+
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        PlotManager.start(event.getServer().overworld());
+        manager.start(event.getServer().overworld());
     }
 
     @SubscribeEvent
     public void onServerStopped(ServerStoppedEvent event) {
-        PlotManager.stop();
+        manager.stop();
     }
 
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
-        PlotManager manager = PlotManager.get();
-        if (manager != null) {
-            manager.tick();
-        }
+        manager.tick();
     }
 }

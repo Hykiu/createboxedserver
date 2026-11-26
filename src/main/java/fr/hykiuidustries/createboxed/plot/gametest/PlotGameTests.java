@@ -38,6 +38,11 @@ import java.util.UUID;
  * In-world checks for the plot fill and the /plot lifecycle.
  */
 @GameTestHolder(CreateBoxed.MOD_ID)
+@SuppressWarnings({
+    "unused",
+    "DuplicatedCode"
+})
+// GameTest methods are discovered by the framework.
 public final class PlotGameTests {
     private PlotGameTests() {
     }
@@ -149,13 +154,11 @@ public final class PlotGameTests {
         clearActiveWork(level);
 
         PlotManager manager = Objects.requireNonNull(
-            PlotManager.get(),
-            "PlotManager was not started"
-        );
+            TeamManager.get(),
+            "TeamManager was not started"
+        ).plots();
 
         ServerPlayer player = createTestPlayer(helper);
-        Objects.requireNonNull(TeamManager.get(), "TeamManager was not started")
-            .drainPendingPlots();
         CommandSourceStack source = new CommandSourceStack(
             player, player.position(), player.getRotationVector(), level,
             2, "test", player.getDisplayName(), level.getServer(), player
@@ -167,12 +170,17 @@ public final class PlotGameTests {
         PlotData data = PlotData.get(level);
         int teamId = data.teamOf(player.getUUID()).orElseThrow().id();
         int plotsBefore = data.plots().size();
+        helper.assertTrue(plotsBefore == 0, "Joining the server must not start a plot");
         try {
+            helper.assertTrue(
+                dispatcher.execute("plot", source) == 1,
+                "/plot must start the team's plot"
+            );
             PlotEntry entry = data.plots().stream()
                 .filter(plot -> plot.teamId() == teamId)
                 .findFirst()
                 .orElse(null);
-            helper.assertTrue(entry != null, "Login must automatically start a plot");
+            helper.assertTrue(entry != null, "/plot must persist a plot");
             helper.assertTrue(manager.isGenerating(), "Manager should be busy");
 
             helper.assertTrue(
@@ -184,7 +192,7 @@ public final class PlotGameTests {
             helper.assertTrue(refused == 0, "A second /plot must be refused while busy");
             int count = data.plots().size();
             helper.assertTrue(
-                count == plotsBefore,
+                count == plotsBefore + 1,
                 "A second plot must not be created (found " + count + ")"
             );
 
@@ -215,7 +223,7 @@ public final class PlotGameTests {
             "TeamManager was not started"
         );
         teams.stop();
-        PlotManager.stop();
+        teams.plots().stop();
         PlotData data = PlotData.get(level);
         for (fr.hykiuidustries.createboxed.team.data.Team team : List.copyOf(data.teams())) {
             data.removeTeam(team.id());
@@ -224,7 +232,7 @@ public final class PlotGameTests {
             data.removePlot(plot);
         }
         data.setNextIndex(0);
-        PlotManager.start(level);
+        teams.plots().start(level);
         teams.start(level);
     }
 

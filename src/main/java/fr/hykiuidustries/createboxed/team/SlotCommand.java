@@ -1,7 +1,9 @@
 package fr.hykiuidustries.createboxed.team;
 
+import fr.hykiuidustries.createboxed.Keys.Lang;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -10,6 +12,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import fr.hykiuidustries.createboxed.plot.PlotCommand;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -37,14 +40,15 @@ public final class SlotCommand {
         TeamManager manager
     ) {
         return Commands.literal(name)
-            .executes(context -> player(context) == null
-                                 ?
-                                 fail(
-                                     context.getSource(),
-                                     Component.translatable("createboxed.slot.player_only")
-                                 )
-                                 :
-                                 report(context.getSource(), manager.goOrCreate(player(context))))
+            .executes(context -> {
+                ServerPlayer player = player(context);
+                return player == null
+                       ? fail(
+                           context.getSource(),
+                           Component.translatable(Lang.SLOT_PLAYER_ONLY)
+                       )
+                       : report(context.getSource(), manager.goOrCreate(player));
+            })
             .then(Commands.literal("team")
                 .then(Commands.literal("invite")
                     .then(Commands.argument("player", StringArgumentType.word())
@@ -85,7 +89,7 @@ public final class SlotCommand {
                         if (player == null) {
                             return fail(
                                 context.getSource(),
-                                Component.translatable("createboxed.slot.player_only")
+                                Component.translatable(Lang.SLOT_PLAYER_ONLY)
                             );
                         }
                         manager.info(player);
@@ -95,6 +99,9 @@ public final class SlotCommand {
             )
             .then(Commands.literal("delete")
                 .executes(context -> withPlayer(context, manager::delete))
+            )
+            .then(Commands.literal("setspawn")
+                .executes(context -> withPlayer(context, manager::setSpawn))
             )
             .then(Commands.literal("visit")
                 .then(Commands.argument("team", StringArgumentType.word())
@@ -139,6 +146,31 @@ public final class SlotCommand {
                                 context.getSource(), adminTeam(context)
                             )
                         ))
+                    )
+                )
+                .then(Commands.literal("setspawn")
+                    .then(adminTeamArgument(manager)
+                        .executes(context -> report(
+                            context.getSource(), manager.adminSetSpawn(
+                                context.getSource(), adminTeam(context), null
+                            )
+                        ))
+                        .then(Commands.argument("x", IntegerArgumentType.integer())
+                            .then(Commands.argument("y", IntegerArgumentType.integer())
+                                .then(Commands.argument("z", IntegerArgumentType.integer())
+                                    .executes(context -> report(
+                                        context.getSource(), manager.adminSetSpawn(
+                                            context.getSource(), adminTeam(context),
+                                            new BlockPos(
+                                                IntegerArgumentType.getInteger(context, "x"),
+                                                IntegerArgumentType.getInteger(context, "y"),
+                                                IntegerArgumentType.getInteger(context, "z")
+                                            )
+                                        )
+                                    ))
+                                )
+                            )
+                        )
                     )
                 )
                 .then(Commands.literal("visit")
@@ -257,7 +289,7 @@ public final class SlotCommand {
         if (player == null) {
             return fail(
                 context.getSource(),
-                Component.translatable("createboxed.slot.player_only")
+                Component.translatable(Lang.SLOT_PLAYER_ONLY)
             );
         }
         return report(context.getSource(), action.apply(player));

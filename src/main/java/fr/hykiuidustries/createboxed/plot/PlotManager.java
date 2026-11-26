@@ -12,7 +12,6 @@ import fr.hykiuidustries.createboxed.plot.generation.ReadyChunk;
 import fr.hykiuidustries.createboxed.plot.geometry.PlotCell;
 import fr.hykiuidustries.createboxed.plot.geometry.PlotGeometry;
 import fr.hykiuidustries.createboxed.plot.geometry.PlotSpiral;
-import lombok.Getter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
@@ -25,60 +24,77 @@ import java.util.Set;
 
 /**
  * Server-side orchestration: placement, chunk-by-chunk filling/clearing and progress reporting.
+ * One instance lives in the module {@link fr.hykiuidustries.createboxed.modules.ServiceRegistry}
+ * and is injected into its consumers. The world-dependent state is bound on {@link #start(ServerLevel)}.
  */
 @NullMarked
 public final class PlotManager {
     private static final Logger LOGGER = LogUtils.getLogger();
-    @Getter
-    private static PlotManager instance;
-    private static @Nullable PlotProgressListener listener;
 
-    private final ServerLevel overworld;
-    private final PlotData data;
+    private @Nullable ServerLevel overworld;
+    private @Nullable PlotData data;
     private @Nullable AsyncPlotGenerator generator;
     private @Nullable PlotChunkFiller activeFiller;
+    private @Nullable PlotProgressListener listener;
 
-    private PlotManager(ServerLevel overworld) {
-        this.overworld = overworld;
-        this.data = PlotData.get(overworld);
+    public PlotManager() {
     }
 
-    public static synchronized void start(ServerLevel overworld) {
-        instance = new PlotManager(overworld);
-        PlotEntry generating = instance.data.generatingPlot();
+    public synchronized void start(ServerLevel overworld) {
+        stopWork();
+        this.overworld = overworld;
+        PlotData storage = PlotData.get(overworld);
+        this.data = storage;
+        PlotEntry generating = storage.generatingPlot();
         if (generating != null) {
             LOGGER.info("Resuming unfinished slot {}", generating.index());
-            instance.startWork(generating, new DirtChunkFiller());
+            startWork(generating, new DirtChunkFiller());
             return;
         }
-        PlotEntry deleting = instance.data.deletingPlot();
+        PlotEntry deleting = storage.deletingPlot();
         if (deleting != null) {
             LOGGER.info("Resuming slot deletion {}", deleting.index());
-            instance.startWork(deleting, new AirChunkFiller());
+            startWork(deleting, new AirChunkFiller());
         }
     }
 
-    public static synchronized void stop() {
-        if (instance != null) {
-            instance.stopWork();
+    public synchronized void stop() {
+        stopWork();
+        listener = null;
+        overworld = null;
+        data = null;
+    }
+
+    public void setListener(@Nullable PlotProgressListener listener) {
+        this.listener = listener;
+    }
+
+    public boolean isNotStarted() {
+        return overworld == null || data == null;
+    }
+
+    private void notifyCompletion(PlotEntry entry) {
+        PlotProgressListener current = listener;
+        if (current != null) {
+            current.onComplete(entry);
         }
-        instance = null;
     }
 
-    public static synchronized PlotManager get() {
-        return instance;
-    }
-
-    public static void setListener(@Nullable PlotProgressListener listener) {
-        PlotManager.listener = listener;
+    private void notifyDeletion(PlotEntry entry) {
+        PlotProgressListener current = listener;
+        if (current != null) {
+            current.onDeleteComplete(entry);
+        }
     }
 
     public boolean isGenerating() {
-        return data.generatingPlot() != null;
+        PlotData storage = data;
+        return storage != null && storage.generatingPlot() != null;
     }
 
     public boolean isDeleting() {
-        return data.deletingPlot() != null;
+        PlotData storage = data;
+        return storage != null && storage.deletingPlot() != null;
     }
 
     public boolean isBusy() {
@@ -86,18 +102,20 @@ public final class PlotManager {
     }
 
     /**
-     * Starts one slot for a team at the lowest usable index. Returns null if busy.
+     * Starts one slot for a team at the lowest usable index. Returns null if busy or not started.
      */
     public synchronized @Nullable PlotEntry createPlot(int teamId, int preferredIndex) {
-        if (isBusy()) {
+        if (isNotStarted() || isBusy()) {
             return null;
         }
+        PlotData storage = data();
+        ServerLevel level = java.util.Objects.requireNonNull(overworld);
 
-        int gap = data.anchored() ? data.gap() : PlotModule.gap();
+        int gap = storage.anchored() ? storage.gap() : PlotModule.gap();
         int pitch = PlotGeometry.pitch(gap);
         int minSpawnDistance = PlotModule.minSpawnDistance();
 
-        Set<Integer> used = data.usedSlotIndices();
+        Set<Integer> used = storage.usedSlotIndices();
         int index = Math.max(0, preferredIndex);
         PlotCell cell = PlotSpiral.cellFromIndex(index);
         while (used.contains(index) || !PlotSpiral.isValid(cell, pitch, minSpawnDistance)) {
@@ -105,23 +123,23 @@ public final class PlotManager {
             cell = PlotSpiral.cellFromIndex(index);
         }
 
-        if (!data.anchored()) {
-            BlockPos spawn = overworld.getSharedSpawnPos();
-            data.initializeAnchor(
+        if (!storage.anchored()) {
+            BlockPos spawn = level.getSharedSpawnPos();
+            storage.initializeAnchor(
                 SectionPos.blockToSectionCoord(spawn.getX()),
                 SectionPos.blockToSectionCoord(spawn.getZ()),
                 gap
             );
-        } else if (PlotModule.gap() != data.gap()) {
+        } else if (PlotModule.gap() != storage.gap()) {
             LOGGER.warn(
                 "Configured gap ({}) differs from the frozen gap ({}) of existing slots; keeping the stored value.",
                 PlotModule.gap(),
-                data.gap()
+                storage.gap()
             );
         }
 
-        int centerX = PlotGeometry.centerChunk(data.anchorX(), cell.cx(), pitch);
-        int centerZ = PlotGeometry.centerChunk(data.anchorZ(), cell.cz(), pitch);
+        int centerX = PlotGeometry.centerChunk(storage.anchorX(), cell.cx(), pitch);
+        int centerZ = PlotGeometry.centerChunk(storage.anchorZ(), cell.cz(), pitch);
         PlotEntry entry = new PlotEntry(
             index,
             cell,
@@ -129,8 +147,8 @@ public final class PlotManager {
             PlotGeometry.originChunk(centerZ),
             teamId
         );
-        data.addPlot(entry);
-        data.setNextIndex(Math.max(data.nextIndex(), index + 1));
+        storage.addPlot(entry);
+        storage.setNextIndex(Math.max(storage.nextIndex(), index + 1));
         startWork(entry, new DirtChunkFiller());
         return entry;
     }
@@ -139,25 +157,30 @@ public final class PlotManager {
      * Starts clearing a team's finished slot. The DELETING status is persisted before any chunk is touched.
      */
     public synchronized @Nullable PlotEntry deletePlot(int teamId) {
-        if (isBusy()) {
+        if (isNotStarted() || isBusy()) {
             return null;
         }
-        PlotEntry entry = data.plots().stream()
+        PlotData storage = data();
+        PlotEntry entry = storage.plots().stream()
             .filter(plot -> plot.teamId() == teamId && plot.status() == PlotStatus.DONE)
             .findFirst()
             .orElse(null);
         if (entry == null) {
             return null;
         }
-        data.startDeletion(entry);
+        storage.startDeletion(entry);
         startWork(entry, new AirChunkFiller());
         return entry;
     }
 
     public void tick() {
-        PlotEntry entry = data.generatingPlot();
+        PlotData storage = data;
+        if (storage == null) {
+            return;
+        }
+        PlotEntry entry = storage.generatingPlot();
         if (entry == null) {
-            entry = data.deletingPlot();
+            entry = storage.deletingPlot();
         }
         AsyncPlotGenerator active = generator;
         if (entry == null || active == null) {
@@ -167,7 +190,9 @@ public final class PlotManager {
         boolean deleting = entry.status() == PlotStatus.DELETING;
         int limit = PlotModule.chunksPerTick();
         for (int done = 0; done < limit; done++) {
-            boolean stillActive = deleting ? data.deletingPlot() == entry : data.generatingPlot() == entry;
+            boolean stillActive = deleting ?
+                                  storage.deletingPlot() == entry :
+                                  storage.generatingPlot() == entry;
             if (!stillActive) {
                 return;
             }
@@ -197,7 +222,7 @@ public final class PlotManager {
                 active.start(entry.nextChunk(), entry.originX(), entry.originZ());
                 break;
             }
-            data.advanceChunk(entry, ready.index() + 1);
+            storage.advanceChunk(entry, ready.index() + 1);
             PlotProgressListener current = listener;
             if (current != null) {
                 current.onProgress(entry, entry.nextChunk());
@@ -214,7 +239,7 @@ public final class PlotManager {
         LevelChunk chunk = java.util.Objects.requireNonNull(ready.chunk());
         PlotChunkFiller filler = java.util.Objects.requireNonNull(activeFiller);
         try {
-            filler.fill(overworld, chunk, ready.plotX(), ready.plotZ(), ready.prepared());
+            filler.fill(level(), chunk, ready.plotX(), ready.plotZ(), ready.prepared());
         } finally {
             active.release();
         }
@@ -222,35 +247,22 @@ public final class PlotManager {
 
     private void complete(PlotEntry entry, boolean deleting) {
         stopWork();
+        PlotData storage = data();
         if (deleting) {
-            data.finishDeletion(entry);
+            storage.finishDeletion(entry);
             LOGGER.info("Slot {} deleted", entry.index());
             notifyDeletion(entry);
         } else {
-            data.finishPlot(entry);
+            storage.finishPlot(entry);
             LOGGER.info("Slot {} is done", entry.index());
             notifyCompletion(entry);
-        }
-    }
-
-    private static void notifyCompletion(PlotEntry entry) {
-        PlotProgressListener current = listener;
-        if (current != null) {
-            current.onComplete(entry);
-        }
-    }
-
-    private static void notifyDeletion(PlotEntry entry) {
-        PlotProgressListener current = listener;
-        if (current != null) {
-            current.onDeleteComplete(entry);
         }
     }
 
     private void startWork(PlotEntry entry, PlotChunkFiller filler) {
         stopWork();
         activeFiller = filler;
-        generator = new AsyncPlotGenerator(overworld, filler);
+        generator = new AsyncPlotGenerator(level(), filler);
         generator.start(entry.nextChunk(), entry.originX(), entry.originZ());
     }
 
@@ -260,5 +272,21 @@ public final class PlotManager {
         }
         generator = null;
         activeFiller = null;
+    }
+
+    private PlotData data() {
+        PlotData storage = data;
+        if (storage == null) {
+            throw new IllegalStateException("PlotManager was not started");
+        }
+        return storage;
+    }
+
+    private ServerLevel level() {
+        ServerLevel current = overworld;
+        if (current == null) {
+            throw new IllegalStateException("PlotManager was not started");
+        }
+        return current;
     }
 }

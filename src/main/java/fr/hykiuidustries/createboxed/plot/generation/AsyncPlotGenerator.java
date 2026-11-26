@@ -144,6 +144,7 @@ public final class AsyncPlotGenerator {
      * while the ticket reaches the generation holder, so retry briefly instead
      * of failing the plot; the server thread is never blocked here.
      */
+    @SuppressWarnings("BusyWait")
     private LevelChunk loadChunk(ChunkPos pos) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30L);
         String lastError = "unknown error";

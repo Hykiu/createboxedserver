@@ -1,11 +1,15 @@
 package fr.hykiuidustries.createboxed.plot.data;
 
+import fr.hykiuidustries.createboxed.Keys.Nbt;
 import fr.hykiuidustries.createboxed.plot.geometry.PlotCell;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Persistent record of one plot (a slot in user-facing messages).
@@ -23,6 +27,8 @@ public final class PlotEntry {
     private PlotStatus status;
     @Setter
     private int nextChunk;
+    @Setter
+    private @Nullable BlockPos spawnPoint;
 
     public PlotEntry(int index, PlotCell cell, int originX, int originZ, int teamId) {
         this(index, cell, originX, originZ, teamId, PlotStatus.GENERATING, 0);
@@ -44,35 +50,43 @@ public final class PlotEntry {
         this.teamId = teamId;
         this.status = status;
         this.nextChunk = nextChunk;
+        this.spawnPoint = null;
     }
 
     public static PlotEntry read(CompoundTag tag) {
         PlotStatus status;
         try {
-            status = PlotStatus.valueOf(tag.getString("status"));
+            status = PlotStatus.valueOf(tag.getString(Nbt.STATUS));
         } catch (IllegalArgumentException ignored) {
             status = PlotStatus.GENERATING;
         }
-        return new PlotEntry(
-            tag.getInt("index"),
-            new PlotCell(tag.getInt("cellX"), tag.getInt("cellZ")),
-            tag.getInt("originX"),
-            tag.getInt("originZ"),
-            tag.getInt("teamId"),
+        PlotEntry entry = new PlotEntry(
+            tag.getInt(Nbt.INDEX),
+            new PlotCell(tag.getInt(Nbt.CELL_X), tag.getInt(Nbt.CELL_Z)),
+            tag.getInt(Nbt.ORIGIN_X),
+            tag.getInt(Nbt.ORIGIN_Z),
+            tag.getInt(Nbt.TEAM_ID),
             status,
-            tag.getInt("nextChunk")
+            tag.getInt(Nbt.NEXT_CHUNK)
         );
+        if (tag.contains(Nbt.SPAWN_POINT, Tag.TAG_LONG)) {
+            entry.spawnPoint(BlockPos.of(tag.getLong(Nbt.SPAWN_POINT)));
+        }
+        return entry;
     }
 
     public CompoundTag write(CompoundTag tag) {
-        tag.putInt("index", index);
-        tag.putInt("cellX", cell.cx());
-        tag.putInt("cellZ", cell.cz());
-        tag.putInt("originX", originX);
-        tag.putInt("originZ", originZ);
-        tag.putInt("teamId", teamId);
-        tag.putString("status", status.name());
-        tag.putInt("nextChunk", nextChunk);
+        tag.putInt(Nbt.INDEX, index);
+        tag.putInt(Nbt.CELL_X, cell.cx());
+        tag.putInt(Nbt.CELL_Z, cell.cz());
+        tag.putInt(Nbt.ORIGIN_X, originX);
+        tag.putInt(Nbt.ORIGIN_Z, originZ);
+        tag.putInt(Nbt.TEAM_ID, teamId);
+        tag.putString(Nbt.STATUS, status.name());
+        tag.putInt(Nbt.NEXT_CHUNK, nextChunk);
+        if (spawnPoint != null) {
+            tag.putLong(Nbt.SPAWN_POINT, spawnPoint.asLong());
+        }
         return tag;
     }
 }

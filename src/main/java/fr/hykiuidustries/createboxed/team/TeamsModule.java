@@ -51,7 +51,7 @@ public final class TeamsModule implements Module {
     @Override
     public void enable(ModuleContext ctx) {
         this.context = ctx;
-        manager = new TeamManager(ctx.logger());
+        manager = new TeamManager(ctx.logger(), ctx.services().require(PlotManager.class));
         ctx.services().register(TeamManager.class, manager);
         events = new TeamsEvents(manager);
         NeoForge.EVENT_BUS.register(events);
@@ -70,7 +70,6 @@ public final class TeamsModule implements Module {
             context.services().unregister(TeamManager.class);
             context = null;
         }
-        PlotManager.setListener(null);
         manager = null;
     }
 
@@ -83,12 +82,16 @@ public final class TeamsModule implements Module {
     }
 
     public static boolean allowVisitors() {
-        return require(allowVisitors, "allowVisitors").get();
+        return require(allowVisitors).get();
     }
 
-    private static ModConfigSpec.BooleanValue require(ModConfigSpec.BooleanValue value, String name) {
+    public static boolean visitorsDisabled() {
+        return !allowVisitors();
+    }
+
+    private static ModConfigSpec.BooleanValue require(ModConfigSpec.BooleanValue value) {
         if (value == null) {
-            throw new IllegalStateException("Teams config was not built: " + name);
+            throw new IllegalStateException("Teams config was not built: allowVisitors");
         }
         return value;
     }

@@ -1,5 +1,6 @@
 package fr.hykiuidustries.createboxed.plot.data;
 
+import fr.hykiuidustries.createboxed.Keys.Nbt;
 import fr.hykiuidustries.createboxed.CreateBoxed;
 import fr.hykiuidustries.createboxed.team.data.Team;
 import fr.hykiuidustries.createboxed.team.data.TeamMember;
@@ -54,14 +55,14 @@ public final class PlotData extends SavedData {
 
     private static PlotData read(CompoundTag tag, HolderLookup.Provider registries) {
         PlotData data = new PlotData();
-        data.anchored = tag.getBoolean("anchored");
-        data.anchorX = tag.getInt("anchorX");
-        data.anchorZ = tag.getInt("anchorZ");
-        data.gap = tag.getInt("gap");
-        data.nextIndex = tag.getInt("nextIndex");
-        data.nextTeamId = tag.getInt("nextTeamId");
+        data.anchored = tag.getBoolean(Nbt.ANCHORED);
+        data.anchorX = tag.getInt(Nbt.ANCHOR_X);
+        data.anchorZ = tag.getInt(Nbt.ANCHOR_Z);
+        data.gap = tag.getInt(Nbt.GAP);
+        data.nextIndex = tag.getInt(Nbt.NEXT_INDEX);
+        data.nextTeamId = tag.getInt(Nbt.NEXT_TEAM_ID);
 
-        ListTag plotList = tag.getList("plots", Tag.TAG_COMPOUND);
+        ListTag plotList = tag.getList(Nbt.PLOTS, Tag.TAG_COMPOUND);
         for (Tag plotTag : plotList) {
             PlotEntry entry = PlotEntry.read((CompoundTag) plotTag);
             data.plots.add(entry);
@@ -72,48 +73,48 @@ public final class PlotData extends SavedData {
             }
         }
 
-        ListTag teamList = tag.getList("teams", Tag.TAG_COMPOUND);
+        ListTag teamList = tag.getList(Nbt.TEAMS, Tag.TAG_COMPOUND);
         for (Tag teamTag : teamList) {
             data.teams.add(Team.read((CompoundTag) teamTag));
         }
 
-        ListTag membershipList = tag.getList("memberships", Tag.TAG_COMPOUND);
+        ListTag membershipList = tag.getList(Nbt.MEMBERSHIPS, Tag.TAG_COMPOUND);
         for (Tag membershipTag : membershipList) {
             CompoundTag entry = (CompoundTag) membershipTag;
-            data.memberships.put(entry.getUUID("uuid"), entry.getInt("teamId"));
+            data.memberships.put(entry.getUUID(Nbt.UUID), entry.getInt(Nbt.TEAM_ID));
         }
         return data;
     }
 
     @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
-        tag.putBoolean("anchored", anchored);
-        tag.putInt("anchorX", anchorX);
-        tag.putInt("anchorZ", anchorZ);
-        tag.putInt("gap", gap);
-        tag.putInt("nextIndex", nextIndex);
-        tag.putInt("nextTeamId", nextTeamId);
+        tag.putBoolean(Nbt.ANCHORED, anchored);
+        tag.putInt(Nbt.ANCHOR_X, anchorX);
+        tag.putInt(Nbt.ANCHOR_Z, anchorZ);
+        tag.putInt(Nbt.GAP, gap);
+        tag.putInt(Nbt.NEXT_INDEX, nextIndex);
+        tag.putInt(Nbt.NEXT_TEAM_ID, nextTeamId);
 
         ListTag plotList = new ListTag();
         for (PlotEntry plot : plots) {
             plotList.add(plot.write(new CompoundTag()));
         }
-        tag.put("plots", plotList);
+        tag.put(Nbt.PLOTS, plotList);
 
         ListTag teamList = new ListTag();
         for (Team team : teams) {
             teamList.add(team.write(new CompoundTag()));
         }
-        tag.put("teams", teamList);
+        tag.put(Nbt.TEAMS, teamList);
 
         ListTag membershipList = new ListTag();
         for (Map.Entry<UUID, Integer> membership : memberships.entrySet()) {
             CompoundTag entry = new CompoundTag();
-            entry.putUUID("uuid", membership.getKey());
-            entry.putInt("teamId", membership.getValue());
+            entry.putUUID(Nbt.UUID, membership.getKey());
+            entry.putInt(Nbt.TEAM_ID, membership.getValue());
             membershipList.add(entry);
         }
-        tag.put("memberships", membershipList);
+        tag.put(Nbt.MEMBERSHIPS, membershipList);
         return tag;
     }
 
@@ -191,6 +192,7 @@ public final class PlotData extends SavedData {
         setDirty();
     }
 
+    @SuppressWarnings("unused")
     public void removePlot(int index) {
         if (plots.removeIf(plot -> plot.index() == index)) {
             if (generatingPlot != null && generatingPlot.index() == index) {

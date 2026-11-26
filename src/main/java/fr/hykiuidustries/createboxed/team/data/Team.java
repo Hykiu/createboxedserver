@@ -1,5 +1,6 @@
 package fr.hykiuidustries.createboxed.team.data;
 
+import fr.hykiuidustries.createboxed.Keys.Nbt;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
@@ -47,12 +48,12 @@ public final class Team {
 
     public static Team read(CompoundTag tag) {
         Team team = new Team(
-            tag.getInt("id"),
-            tag.getString("name"),
-            tag.getUUID("leader"),
-            tag.contains("slotIndex", Tag.TAG_INT) ? tag.getInt("slotIndex") : null
+            tag.getInt(Nbt.ID),
+            tag.getString(Nbt.NAME),
+            tag.getUUID(Nbt.LEADER),
+            tag.contains(Nbt.SLOT_INDEX, Tag.TAG_INT) ? tag.getInt(Nbt.SLOT_INDEX) : null
         );
-        ListTag memberList = tag.getList("members", Tag.TAG_COMPOUND);
+        ListTag memberList = tag.getList(Nbt.MEMBERS, Tag.TAG_COMPOUND);
         for (Tag memberTag : memberList) {
             team.members.add(TeamMember.read((CompoundTag) memberTag));
         }
@@ -60,17 +61,17 @@ public final class Team {
     }
 
     public CompoundTag write(CompoundTag tag) {
-        tag.putInt("id", id);
-        tag.putString("name", name);
-        tag.putUUID("leader", leader);
+        tag.putInt(Nbt.ID, id);
+        tag.putString(Nbt.NAME, name);
+        tag.putUUID(Nbt.LEADER, leader);
         if (slotIndex != null) {
-            tag.putInt("slotIndex", slotIndex);
+            tag.putInt(Nbt.SLOT_INDEX, slotIndex);
         }
         ListTag memberList = new ListTag();
         for (TeamMember member : members) {
             memberList.add(member.write(new CompoundTag()));
         }
-        tag.put("members", memberList);
+        tag.put(Nbt.MEMBERS, memberList);
         return tag;
     }
 
