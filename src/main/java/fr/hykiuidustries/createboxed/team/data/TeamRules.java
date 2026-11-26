@@ -19,15 +19,7 @@ public final class TeamRules {
         if (name == null || name.length() < MIN_LENGTH || name.length() > MAX_LENGTH) {
             return false;
         }
-        for (int i = 0; i < name.length(); i++) {
-            char c = name.charAt(i);
-            boolean allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-                || (c >= '0' && c <= '9') || c == '_' || c == '-';
-            if (!allowed) {
-                return false;
-            }
-        }
-        return true;
+        return name.matches("[a-zA-Z0-9_-]+");
     }
 
     /**
@@ -62,7 +54,12 @@ public final class TeamRules {
     /**
      * A player may join another team unless leaving would strand a slot with no members.
      */
-    public boolean canAccept(boolean currentHasSlot, int currentMemberCount, int targetSize, int maxTeamSize) {
+    public boolean canAccept(
+        boolean currentHasSlot,
+        int currentMemberCount,
+        int targetSize,
+        int maxTeamSize
+    ) {
         if (targetSize >= maxTeamSize) {
             return false;
         }
